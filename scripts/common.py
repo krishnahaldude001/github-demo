@@ -3,12 +3,70 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "config" / "l10n.json"
+
+PLACEHOLDER_PATTERNS = [
+    re.compile(r"\{[^{}]+\}"),  # {name}, {Localization}
+    re.compile(r"%\d*\$?[sd@]"),  # %s, %1$s
+    re.compile(r"%\([^)]+\)[sd]"),  # %(name)s
+]
+
+
+def extract_placeholders(text: str) -> list[str]:
+    found: list[str] = []
+    for pattern in PLACEHOLDER_PATTERNS:
+        found.extend(pattern.findall(text))
+    return found
+
+
+def enforce_placeholders(source: str, target: str) -> str:
+    """Keep source placeholders exactly; never translate tokens like {Localization}."""
+    if not isinstance(source, str) or not isinstance(target, str):
+        return target
+    src_ph = extract_placeholders(source)
+    if not src_ph:
+        return target
+    tgt_ph = extract_placeholders(target)
+    if src_ph == tgt_ph:
+        return target
+
+    # Replace any altered brace placeholders by restoring source tokens in order.
+    result = target
+    tgt_brace = PLACEHOLDER_PATTERNS[0].findall(result)
+    src_brace = PLACEHOLDER_PATTERNS[0].findall(source)
+    if len(tgt_brace) == len(src_brace) and tgt_brace != src_brace:
+        for old, new in zip(tgt_brace, src_brace):
+            result = result.replace(old, new, 1)
+    elif src_brace and not all(p in result for p in src_brace):
+        # Append missing placeholders rather than dropping them silently
+        missing = [p for p in src_brace if p not in result]
+        if missing:
+            result = result.rstrip() + " " + " ".join(missing)
+
+    # Final exact check: if still wrong, rebuild by swapping known tokens
+    if extract_placeholders(source) != extract_placeholders(result):
+        # deterministic fallback: put source placeholders back via regex replace of {.*}
+        # Use source placeholders in appearance order.
+        src_iter = iter(src_brace)
+
+        def _restore(_match: re.Match[str]) -> str:
+            try:
+                return next(src_iter)
+            except StopIteration:
+                return _match.group(0)
+
+        if src_brace:
+            result = PLACEHOLDER_PATTERNS[0].sub(_restore, result)
+            for p in src_brace:
+                if p not in result:
+                    result = f"{result} {p}".strip()
+    return result
 
 
 def load_config() -> dict:

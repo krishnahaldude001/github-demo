@@ -116,7 +116,8 @@ Return JSON with this exact shape:
 
 Rules:
 - If many targets are dummy $$$ placeholders, mark translations_ok and approve_ready as false, status NEEDS_REVIEW.
-- If placeholders are broken, mark structure_ok false and status FAIL or NEEDS_REVIEW.
+- If placeholders like {Localization}/{name}/%s are changed or translated, mark structure_ok false and status FAIL.
+- Placeholders/variables in curly braces must stay EXACTLY unchanged.
 - Be strict but practical for a demo.
 - Do not wrap in markdown.
 

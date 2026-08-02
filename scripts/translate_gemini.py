@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from common import (
     REPO_ROOT,
     delete_nested_value,
+    enforce_placeholders,
     flatten_json,
     glossary_text,
     load_config,
@@ -92,7 +93,10 @@ Mode: {mode}
 Rules:
 - Translate ONLY the strings in "units_to_translate".
 - Return a JSON object mapping each dotted key to its translated string.
-- Preserve placeholders exactly (e.g. {{name}}, %s, HTML tags).
+- NEVER translate placeholders / variables. Keep them EXACTLY as in the source.
+  Examples that must remain unchanged: {{Localization}}, {{name}}, {{count}}, %s, %1$s, %(name)s, HTML tags.
+- Example: source 'Hello, Team {{Localization}}' -> target 'Bonjour, équipe {{Localization}}'
+  (translate words, keep {{Localization}} character-for-character).
 - Do not invent keys. Do not wrap the answer in markdown.
 - Keep product/proper nouns per glossary when provided.
 - Prefer natural UI tone for the target locale.
@@ -176,6 +180,15 @@ def translate_file_entry(entry: dict[str, Any], locale: str, model_name: str) ->
     if missing:
         raise RuntimeError(f"Gemini missing keys: {missing}")
 
+    # Enforce placeholders like {Localization} after LLM output
+    for key, src_val in units.items():
+        tgt_val = translated[key]
+        if isinstance(src_val, str) and isinstance(tgt_val, str):
+            fixed = enforce_placeholders(src_val, tgt_val)
+            if fixed != tgt_val:
+                print(f"Restored placeholders for {key}: {tgt_val!r} -> {fixed!r}")
+            translated[key] = fixed
+
     if mode == "full":
         out: dict[str, Any] = {}
         for key, value in translated.items():
@@ -201,7 +214,7 @@ def main() -> int:
 
     cfg = load_config()
     locale = args.locale or (cfg.get("target_locales") or ["fr_ca"])[0]
-    model_name = args.model or cfg.get("gemini_model") or "gemini-2.0-flash"
+    model_name = args.model or cfg.get("gemini_model") or "gemini-2.5-flash"
 
     diff_path = Path(args.diff)
     if not diff_path.is_absolute():

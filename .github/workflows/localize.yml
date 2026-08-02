@@ -66,6 +66,19 @@ jobs:
           echo "base=$BASE" >> "$GITHUB_OUTPUT"
           echo "head=$HEAD" >> "$GITHUB_OUTPUT"
           echo "Diff range: $BASE .. $HEAD"
+          {
+            echo "## Localize run parameters"
+            echo ""
+            echo "| Parameter | Value |"
+            echo "|---|---|"
+            echo "| event | \`${{ github.event_name }}\` |"
+            echo "| locale | \`${{ inputs.locale || 'fr_ca' }}\` |"
+            echo "| base | \`$BASE\` |"
+            echo "| head | \`$HEAD\` |"
+            echo "| commit | \`${{ github.sha }}\` |"
+            echo ""
+            echo "Placeholders like \`{Localization}\` / \`{name}\` must stay unchanged in translations."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Python
         uses: actions/setup-python@v5

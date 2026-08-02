@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import (
     REPO_ROOT,
     artifacts_dir,
+    extract_placeholders,
     flatten_json,
     load_config,
     load_json_file,
@@ -22,21 +23,8 @@ from common import (
     to_repo_posix,
 )
 
-PLACEHOLDER_PATTERNS = [
-    re.compile(r"\{[^{}]+\}"),  # {name}
-    re.compile(r"%\d*\$?[sd@]"),  # %s, %1$s
-    re.compile(r"%\([^)]+\)[sd]"),  # %(name)s
-]
-
 # Old Phrase-style / dummy placeholders
 DUMMY_TARGET_RE = re.compile(r"^[\s$]+$")
-
-
-def extract_placeholders(text: str) -> list[str]:
-    found: list[str] = []
-    for pattern in PLACEHOLDER_PATTERNS:
-        found.extend(pattern.findall(text))
-    return found
 
 
 def looks_untranslated(source: str, target: str) -> bool:

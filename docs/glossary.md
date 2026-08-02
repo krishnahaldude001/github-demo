@@ -14,3 +14,4 @@ Keep short for the Gemini demo. Scripts may load this later for terminology hint
 - Keep placeholders unchanged if present (e.g. `{name}`, `%s`)
 - Do not add or remove JSON keys
 - Prefer clear, natural Canadian French for UI-like strings
+- Tokens like `{Localization}`, `{name}`, `{count}` are **variables** — never translate them
