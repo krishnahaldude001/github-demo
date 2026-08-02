@@ -3,7 +3,7 @@
     "title": "Welcome to the {ProductName} localization demo",
     "greeting": "Hello, {userName}!",
     "status": "Your order {orderId} is ready.",
-    "cta": "Click here to continue",
+    "cta": "Click here to get started",
     "footer": "Need help? Contact {SupportEmail}."
   }
 }

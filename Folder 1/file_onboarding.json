@@ -1,0 +1,8 @@
+{
+  "segments": {
+    "welcome": "Welcome aboard, {userName}!",
+    "step1": "Open {ProductName} and choose your workspace.",
+    "step2": "Invite your team with code {inviteCode}.",
+    "done": "You're all set. Start translating."
+  }
+}
