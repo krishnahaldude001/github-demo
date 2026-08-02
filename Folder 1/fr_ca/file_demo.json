@@ -3,7 +3,7 @@
     "title": "Bienvenue à la démo de localisation de {ProductName}",
     "greeting": "Bonjour, {userName}!",
     "status": "Votre commande {orderId} est prête.",
-    "cta": "Cliquez ici pour continuer",
+    "cta": "Cliquez ici pour commencer",
     "footer": "Besoin d'aide? Contactez {SupportEmail}."
   }
 }
