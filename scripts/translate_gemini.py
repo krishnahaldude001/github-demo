@@ -108,7 +108,7 @@ Full source JSON (context only):
 {json.dumps(source_obj, ensure_ascii=False, indent=2)}
 
 Existing target JSON (keep unchanged keys stable; may be incomplete):
-{json.dumps(existing_target or {{}}, ensure_ascii=False, indent=2)}
+{json.dumps(existing_target if existing_target is not None else {}, ensure_ascii=False, indent=2)}
 
 units_to_translate:
 {json.dumps(units, ensure_ascii=False, indent=2)}
