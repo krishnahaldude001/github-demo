@@ -1,10 +1,11 @@
 {
   "segments": {
-    "segment_1": "$$$$$, $$$$$!",
+    "segment_1": "Bonjour, Team Fusion - démo de localisation",
     "segment_2": "$$$ $$$ $$$?",
     "segment_3": "$$$$$$$ $$ $$$$$$ $$$$$$$$$$$.",
     "segment_4": "$$$$ $$ $ $$$$ $$$$.",
     "segment_5": "$$$$$$$",
-    "segment_6": "$$$"
+    "segment_6": "$$$",
+    "segment_7": "Cette chaîne a été ajoutée pour le test Gemini."
   }
 }
