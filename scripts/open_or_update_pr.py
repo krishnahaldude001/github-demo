@@ -267,15 +267,59 @@ def main() -> int:
         return 0
 
     original = current_branch() or "main"
-    # Create/switch branch
-    exists = run_git(["rev-parse", "--verify", branch], check=False)
-    if exists.returncode == 0:
-        run_git(["checkout", branch])
-    else:
-        run_git(["checkout", "-b", branch])
 
-    rels = [to_repo_posix(p) for p in paths]
-    run_git(["add", "--", *rels])
+    # Preserve this-run translation outputs before switching branches.
+    preserved: dict[str, str] = {}
+    for path in paths:
+        if path.is_file():
+            preserved[to_repo_posix(path)] = path.read_text(encoding="utf-8")
+
+    # Fetch base + existing bot branch (may not exist yet).
+    run_git(["fetch", "origin", args.base], check=False)
+    run_git(["fetch", "origin", branch], check=False)
+
+    # Rebuild bot branch from latest base so PR stays current with main.
+    base_ref = f"origin/{args.base}"
+    if run_git(["rev-parse", "--verify", base_ref], check=False).returncode != 0:
+        base_ref = args.base
+    run_git(["checkout", "--detach", base_ref])
+    run_git(["checkout", "-B", branch])
+
+    # Keep previously published locale files from remote bot branch (if any),
+    # then overlay this run's fresh translations.
+    remote_branch = f"origin/{branch}"
+    if run_git(["rev-parse", "--verify", remote_branch], check=False).returncode == 0:
+        listed = run_git(["ls-tree", "-r", "--name-only", remote_branch], check=False)
+        for rel in listed.stdout.splitlines():
+            if f"/{locale}/" not in rel.replace("\\", "/"):
+                continue
+            if rel in preserved:
+                continue
+            shown = run_git(["show", f"{remote_branch}:{rel}"], check=False)
+            if shown.returncode != 0:
+                continue
+            out = REPO_ROOT / Path(*rel.replace("\\", "/").split("/"))
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(shown.stdout, encoding="utf-8")
+
+    for rel, content in preserved.items():
+        out = REPO_ROOT / Path(*rel.split("/"))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(content, encoding="utf-8")
+
+    rels = list(dict.fromkeys([*preserved.keys(), *[to_repo_posix(p) for p in paths]]))
+    # Also stage any restored remote locale files.
+    locale_files = run_git(
+        ["ls-files", "--others", "--modified", "--exclude-standard"],
+        check=False,
+    ).stdout.splitlines()
+    for rel in locale_files:
+        if f"/{locale}/" in rel.replace("\\", "/"):
+            rels.append(rel)
+    rels = list(dict.fromkeys(rels))
+
+    if rels:
+        run_git(["add", "--", *rels])
     staged = run_git(["diff", "--cached", "--name-only"]).stdout.strip()
     if staged:
         msg = (
@@ -301,6 +345,7 @@ def main() -> int:
 
     # Prefer non-interactive HTTPS with token.
     # Fine-grained PATs authenticate more reliably as <username>:<token>.
+    # Bot branch is intentionally rewritten from main + latest translations.
     push_urls = [
         f"https://{owner}:{token}@github.com/{owner}/{repo}.git",
         f"https://oauth2:{token}@github.com/{owner}/{repo}.git",
@@ -312,6 +357,7 @@ def main() -> int:
             [
                 "git",
                 "push",
+                "--force",
                 "-u",
                 remote_url,
                 f"HEAD:refs/heads/{branch}",
