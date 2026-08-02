@@ -1,0 +1,19 @@
+{
+  "source_language": "en",
+  "target_locales": ["fr_ca"],
+  "source_roots": ["Folder 1", "Folder 2"],
+  "source_glob": "Folder */*.json",
+  "locale_dirname_pattern": "{locale}",
+  "exclude_locale_dirs": ["fr_ca"],
+  "engine": "gemini",
+  "gemini_model": "gemini-2.5-flash",
+  "qa_mode": "rules+llm",
+  "auto_merge": false,
+  "pr": {
+    "branch_prefix": "l10n/",
+    "labels": ["l10n"],
+    "label_qa_pass": "l10n-qa-pass",
+    "label_needs_review": "needs-l10n-review"
+  },
+  "artifacts_dir": "artifacts"
+}

@@ -1,0 +1,143 @@
+# Localization pipeline — Phase 2 change detection
+# Requires repo secret GEMINI_API_KEY for Phases 3+ (not used for diff-only).
+
+name: Localize
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Folder 1/*.json"
+      - "Folder 2/*.json"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Folder 1/*.json"
+      - "Folder 2/*.json"
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "Base git ref for diff"
+        required: false
+        default: ""
+      head:
+        description: "Head git ref for diff"
+        required: false
+        default: ""
+      locale:
+        description: "Target locale"
+        required: false
+        default: "fr_ca"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  localize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve diff range
+        id: refs
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BASE="${{ inputs.base }}"
+            HEAD="${{ inputs.head }}"
+            [ -n "$BASE" ] || BASE="HEAD~1"
+            [ -n "$HEAD" ] || HEAD="HEAD"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            # push
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+              BASE="HEAD~1"
+            fi
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$HEAD" >> "$GITHUB_OUTPUT"
+          echo "Diff range: $BASE .. $HEAD"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Key-level JSON diff (Phase 2)
+        run: |
+          python scripts/diff_json_keys.py \
+            --base "${{ steps.refs.outputs.base }}" \
+            --head "${{ steps.refs.outputs.head }}" \
+            --out artifacts/diff-report.json
+
+      - name: Show diff summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("artifacts/diff-report.json")
+          report = json.loads(p.read_text(encoding="utf-8"))
+          print(json.dumps(report["summary"], indent=2))
+          for f in report["files"]:
+              print(f"- {f['change_type']}: {f['source_path']} "
+                    f"(+{len(f['added_keys'])} ~{len(f['changed_keys'])} -{len(f['deleted_keys'])})")
+          PY
+
+      - name: Upload diff-report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: diff-report
+          path: artifacts/diff-report.json
+          if-no-files-found: error
+
+      # Phases 3–5
+      - name: Translate + QA
+        if: github.event_name != 'pull_request'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          LOCALE="${{ inputs.locale }}"
+          [ -n "$LOCALE" ] || LOCALE="fr_ca"
+          python scripts/translate_gemini.py --diff artifacts/diff-report.json --locale "$LOCALE"
+          python scripts/qa_check.py --diff artifacts/diff-report.json --locale "$LOCALE"
+          python scripts/llm_review.py --diff artifacts/diff-report.json --locale "$LOCALE"
+
+      - name: Upload QA artifacts
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report
+          path: |
+            artifacts/qa-report.md
+            artifacts/qa-report.json
+            artifacts/llm-review.json
+          if-no-files-found: warn
+
+      - name: Open or update translation PR
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LOCALE="${{ inputs.locale }}"
+          [ -n "$LOCALE" ] || LOCALE="fr_ca"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python scripts/open_or_update_pr.py \
+            --diff artifacts/diff-report.json \
+            --qa-report artifacts/qa-report.md \
+            --qa-json artifacts/qa-report.json \
+            --locale "$LOCALE" \
+            --base main \
+            --no-include-source
+
